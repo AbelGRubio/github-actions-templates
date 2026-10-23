@@ -3,7 +3,7 @@ name: CD - Release & Deploy
 on:
   push:
     branches:
-      - master
+      - main
       - develop
       - 'feature/*'
 
@@ -82,7 +82,7 @@ jobs:
     steps:
       - name: Deploy to Environment
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "Deploying official release ${{ needs.semantic-release.outputs.version }} to PRODUCTION..."
           elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
             echo "Deploying pre-release ${{ needs.semantic-release.outputs.version }} to STAGING/QA..."
