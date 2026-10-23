@@ -1,0 +1,38 @@
+name: CD - Manual Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: 'Tag of the version to restore (e.g., v1.0.0)'
+        required: true
+        type: string
+      environment:
+        description: 'Target Environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Specific Tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Execute Rollback Deployment
+        run: |
+          echo "Starting Rollback to version ${{ inputs.target_version }} in environment ${{ inputs.environment }}"
+          # Build artifact for the rollback release target if needed
+          uv build
+          # Add environment-specific deployment scripts here

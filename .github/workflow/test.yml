@@ -1,0 +1,39 @@
+name: Tests
+
+on:
+  workflow_call:
+    secrets:
+      PR_TOKEN_USER:
+        required: true
+
+env:
+  PYTHONPATH: src
+  PIP_CACHE_DIR: .cache/pip
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      PR_TOKEN_USER: ${{ secrets.PR_TOKEN_USER }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest
+      - name: Upload coverage
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: coverage
+          path: coverage.xml

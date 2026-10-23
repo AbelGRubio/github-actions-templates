@@ -1,0 +1,48 @@
+name: Semantic Release
+
+on:
+  workflow_call:
+    secrets:
+      PR_TOKEN_USER:
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      PR_TOKEN_USER: ${{ secrets.PR_TOKEN_USER }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+          python-version: "3.13"
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Clean build artifacts
+        run: rm -rf dist/
+
+      - name: Semantic release and build artifacts
+        run: uv run semantic-release version
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ needs.semantic-release.outputs.version }}
+          path: dist/

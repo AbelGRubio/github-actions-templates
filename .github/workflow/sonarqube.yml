@@ -1,0 +1,27 @@
+# .github/workflows/sonarqube.yml
+name: SonarQube Analysis
+
+on:
+  workflow_call:
+    secrets:
+      SONAR_TOKEN:
+        required: true
+jobs:
+  sonarqube:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download Coverage Report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@c8357220fa7152a7881d87dcaefafbd129e37cb9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

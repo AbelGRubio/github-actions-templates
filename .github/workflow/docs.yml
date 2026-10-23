@@ -1,0 +1,33 @@
+name: Documentation
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          enable-cache: true
+          python-version: "3.13"
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Install dependencies and build
+        run: |
+          uv sync --group docs --no-build
+          uv run --no-build --python 3.13 mkdocs build -vv
+
+      - name: Fix README links for MkDocs
+        if: vars.ENABLE_FIX_LINKS == 'true'
+        run: make fix-links
+
+      - name: Deploy to GitHub Pages
+        run: uv run --no-build mkdocs gh-deploy --force

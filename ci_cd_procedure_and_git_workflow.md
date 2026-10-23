@@ -170,31 +170,33 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          version: "latest"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install Dependencies
-        run: |
-          pip install poetry
-          poetry install
+        run: uv sync --all-extras --dev
 
-      - name: Run Ruff (Linter & Formatter)
+      - name: Run Ruff (Linter & Formatter Check)
         run: |
-          poetry run ruff check .
-          poetry run ruff format --check .
+          uv run ruff check .
+          uv run ruff format --check .
 
-      - name: Run Tests with Coverage
-        run: |
-          poetry run pytest --cov=. --cov-report=xml
+      - name: Run Pytest with Coverage
+        run: uv run pytest
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v2.0.2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
 ```
 
 ### 6.2. Main CD & Release Pipeline (`.github/workflows/cd-release.yml`)
@@ -214,18 +216,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          version: "latest"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install Dependencies
-        run: |
-          pip install poetry
-          poetry install
+        run: uv sync --all-extras --dev
+
       - name: Lint & Test
         run: |
-          poetry run ruff check .
-          poetry run pytest --cov=. --cov-report=xml
+          uv run ruff check .
+          uv run pytest
 
   semantic-release:
     needs: quality-and-test
@@ -239,6 +248,11 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
       - name: Python Semantic Release
         id: release
         uses: python-semantic-release/python-semantic-release@v8.5.1
@@ -251,11 +265,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Build Package
-        run: |
-          pip install poetry
-          poetry build
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Build Package with uv
+        run: uv build
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -307,9 +324,16 @@ jobs:
         with:
           ref: ${{ inputs.target_version }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
       - name: Execute Rollback Deployment
         run: |
           echo "Starting Rollback to version ${{ inputs.target_version }} in environment ${{ inputs.environment }}"
+          # Build artifact for the rollback release target if needed
+          uv build
           # Add environment-specific deployment scripts here
 
 ```
