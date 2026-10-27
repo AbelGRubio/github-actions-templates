@@ -35,7 +35,7 @@ jobs:
 
   pre-commit:
     needs: check-pyproject
-    if: needs.check-pyproject.outputs.exists == 'true' && "!contains(github.event.head_commit.message, 'chore(release)')"
+    if: needs.check-pyproject.outputs.exists == 'true' && !contains(github.event.head_commit.message, 'chore(release)')
     uses: ./.github/workflows/pre-commit.yml
 
   test:
