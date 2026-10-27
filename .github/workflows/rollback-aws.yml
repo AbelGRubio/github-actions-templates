@@ -1,0 +1,69 @@
+name: Emergency AWS Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment to rollback'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      task_revision:
+        description: 'Specific Task Definition Revision number to rollback to (leave blank for previous active -1)'
+        required: false
+        default: ''
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  rollback:
+    name: Execute AWS ECS Rollback
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Perform ECS Rollback via AWS CLI
+        env:
+          CLUSTER_NAME: ${{ secrets.AWS_ECS_CLUSTER }}
+          SERVICE_NAME: ${{ secrets.AWS_ECS_SERVICE }}
+          DESIRED_REVISION: ${{ github.event.inputs.task_revision }}
+        run: |
+          echo "Initiating emergency rollback for service $SERVICE_NAME in cluster $CLUSTER_NAME..."
+
+          if [ -n "$DESIRED_REVISION" ]; then
+            # If user provided a specific revision number, target that exact family:revision
+            TARGET_TASK_DEF="${SERVICE_NAME}:${DESIRED_REVISION}"
+            echo "Rolling back to user-specified task definition: $TARGET_TASK_DEF"
+          else
+            # Otherwise, find the current active task definition and get the previous revision number
+            CURRENT_ARN=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query "services[0].taskDefinition" --output text)
+            FAMILY=$(echo $CURRENT_ARN | awk -F'/' '{print $2}' | awk -F':' '{print $1}')
+            CURRENT_REV=$(echo $CURRENT_ARN | awk -F':' '{print $2}')
+            PREV_REV=$((CURRENT_REV - 1))
+            
+            TARGET_TASK_DEF="${FAMILY}:${PREV_REV}"
+            echo "Auto-detected previous revision. Rolling back from revision $CURRENT_REV to $PREV_REV"
+          fi
+
+          # Update service to the target rollback definition
+          aws ecs update-service \
+            --cluster $CLUSTER_NAME \
+            --service $SERVICE_NAME \
+            --task-definition $TARGET_TASK_DEF \
+            --force-new-deployment
+
+          echo "Waiting for service to stabilize on the rollback version..."
+          aws ecs wait services-stable --cluster $CLUSTER_NAME --services $SERVICE_NAME
+
+          echo "Rollback successfully executed and stabilized!"

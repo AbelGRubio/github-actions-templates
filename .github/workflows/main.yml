@@ -59,44 +59,16 @@ jobs:
     uses: ./.github/workflows/docs.yml
 
   publish:
-    name: 🚀 Publish to PyPI
     needs: [ release ]
     if: |
       always() &&
       vars.ENABLE_PYPI_PUBLISH == 'true' &&
       needs.release.result == 'success' &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-    runs-on: ubuntu-latest
-    environment: publish
     permissions:
       id-token: write
       contents: read
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull latest changes (from release job)
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull origin main
-        shell: bash
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.13
-
-      - name: Build package
-        run: uv build
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
+    uses:  ./.github/workflows/pypi-publish.yml
 
   # 5. Docker (Solo tras un nuevo Release exitoso)
   docker:
@@ -108,5 +80,5 @@ jobs:
     permissions:
       packages: write
       contents: read
-    uses: ./.github/workflows/docker-publish.yml
+    uses: ./.github/workflows/docker-build-publish.yml
     secrets: inherit

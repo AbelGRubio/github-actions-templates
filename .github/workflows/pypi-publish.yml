@@ -1,0 +1,51 @@
+name: Publish to PyPI
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+
+jobs:
+  publish:
+    name: 🚀 Publish to PyPI
+    if: |
+      always() &&
+      vars.ENABLE_PYPI_PUBLISH == 'true' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    environment: publish
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull latest changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          CURRENT_BRANCH=${GITHUB_REF#refs/heads/}
+          echo "Pulling latest changes from $CURRENT_BRANCH"
+          git pull origin $CURRENT_BRANCH
+        shell: bash
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5 # Asegúrate de usar una versión estable actual
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.13
+
+      - name: Build package
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # Usar tags estables como release/v1 o un hash concreto garantiza mayor seguridad frente a cambios

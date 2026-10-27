@@ -1,0 +1,94 @@
+name: Manual AWS CD Pipeline
+
+# 1. Trigger configuration: Manual execution via workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Tag, commit, or branch to deploy (e.g., v1.2.0 or main)'
+        required: true
+        default: 'main'
+      environment:
+        description: 'Target deployment environment'
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production # only main branch can deploy to production
+
+# Set permissions for the GitHub token (required for OIDC AWS authentication)
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-to-aws:
+    name: Deploy to AWS ECS
+    needs: build-and-push-docker # Se ejecuta solo después del build
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      # 6. Update AWS resources using AWS CLI (ECS Task Definition & Runtime Environment Variables)
+      - name: Update AWS ECS Service and Runtime Configuration
+        env:
+          CLUSTER_NAME: ${{ secrets.AWS_ECS_CLUSTER }}
+          SERVICE_NAME: ${{ secrets.AWS_ECS_SERVICE }}
+          IMAGE_URI: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.AWS_ECR_REPOSITORY_NAME }}:${{ github.event.inputs.version_tag }}
+          TARGET_ENV: ${{ github.event.inputs.environment }}
+          DB_HOST: ${{ secrets.DB_HOST }} # Example runtime secret injected into task definition
+        run: |
+          echo "Fetching current task definition for service..."
+          
+          # Download current task definition JSON
+          aws ecs describe-task-definition \
+            --task-definition $SERVICE_NAME \
+            --query "taskDefinition" > task-def.json
+
+          # Strip non-registerable metadata fields from the JSON template using jq
+          jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' task-def.json > clean-task-def.json
+
+          # Inject updated Docker image and environment variables into runtime definition
+          jq --arg IMAGE "$IMAGE_URI" \
+             --arg ENV "$TARGET_ENV" \
+             --arg DB "$DB_HOST" \
+             '.containerDefinitions[0].image = $IMAGE |
+              .containerDefinitions[0].environment += [
+                {"name": "APP_ENV", "value": $ENV},
+                {"name": "DATABASE_HOST", "value": $DB}
+              ]' clean-task-def.json > updated-task-def.json
+
+          # Register new AWS ECS task definition revision
+          NEW_TASK_DEF=$(aws ecs register-task-definition \
+            --cli-input-json file://updated-task-def.json \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)
+
+          echo "Registered new task definition: $NEW_TASK_DEF"
+
+          # Force deployment of the service with the newly registered task definition
+          aws ecs update-service \
+            --cluster $CLUSTER_NAME \
+            --service $SERVICE_NAME \
+            --task-definition $NEW_TASK_DEF \
+            --force-new-deployment
+
+      # 7. Optional API Gateway route deployment refresh (AWS CLI)
+      - name: Trigger API Gateway Deployment (Optional)
+        env:
+          API_ID: ${{ secrets.AWS_API_GATEWAY_ID }}
+          STAGE_NAME: ${{ github.event.inputs.environment }}
+        run: |
+          # Example command to re-deploy or update API Gateway REST/HTTP API stage if applicable
+          if [ -n "$API_ID" ]; then
+            echo "Deploying API Gateway stage: $STAGE_NAME"
+            aws apigateway create-deployment \
+              --rest-api-id $API_ID \
+              --stage-name $STAGE_NAME \
+              --description "Deployment triggered by GitHub Actions version ${{ github.event.inputs.version_tag }}"
+          fi
+
+      # 8. Final completion status message
+      - name: Notify Deployment Status
+        run: |
+          echo "Successfully deployed version '${{ github.event.inputs.version_tag }}' to environment '${{ github.event.inputs.environment }}'."
