@@ -14,34 +14,59 @@ on:
   workflow_dispatch:
 
 jobs:
+  check-pyproject:
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for pyproject.toml
+        id: check
+        run: |
+          if [ -f "pyproject.toml" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "pyproject.toml found."
+          else
+            echo "::warning::pyproject.toml not found in root. Skipping Python-related jobs."
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
   pre-commit:
-    if: "!contains(github.event.head_commit.message, 'chore(release)')"
+    needs: check-pyproject
+    if: needs.check-pyproject.outputs.exists == 'true' && "!contains(github.event.head_commit.message, 'chore(release)')"
     uses: ./.github/workflows/pre-commit.yml
 
   test:
-    needs: pre-commit
+    needs: [check-pyproject, pre-commit]
+    if: needs.check-pyproject.outputs.exists == 'true'
     uses: ./.github/workflows/test.yml
     secrets:
       PR_TOKEN_USER: ${{ secrets.PR_TOKEN }}
 
   sonar:
     needs: test
+    if: needs.check-pyproject.outputs.exists == 'true'
     uses: ./.github/workflows/sonarqube.yml
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   approve-release:
-    needs: sonar
+    needs: [check-pyproject, sonar]
     if: |
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
-      (github.event_name == 'workflow_dispatch')
+      needs.check-pyproject.outputs.exists == 'true' && (
+        (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+        (github.event_name == 'workflow_dispatch')
+      )
     runs-on: ubuntu-latest
     environment: release
     steps:
       - run: echo "Release approved by user"
 
   release:
-    needs: approve-release
+    needs: [check-pyproject, approve-release]
+    if: needs.check-pyproject.outputs.exists == 'true'
     permissions:
       contents: write
       packages: write
@@ -50,8 +75,9 @@ jobs:
       PR_TOKEN_USER: ${{ secrets.PR_TOKEN }}
 
   docs:
-    needs: [test, release]
+    needs: [check-pyproject, test, release]
     if: |
+      needs.check-pyproject.outputs.exists == 'true' &&
       always() &&
       (needs.release.result == 'success') && needs.test.result == 'success' &&
       github.ref == 'refs/heads/main'
@@ -60,8 +86,9 @@ jobs:
     uses: ./.github/workflows/docs.yml
 
   publish:
-    needs: [ release ]
+    needs: [check-pyproject, release]
     if: |
+      needs.check-pyproject.outputs.exists == 'true' &&
       always() &&
       vars.ENABLE_PYPI_PUBLISH == 'true' &&
       needs.release.result == 'success' &&
@@ -71,10 +98,10 @@ jobs:
       contents: read
     uses:  ./.github/workflows/pypi-publish.yml
 
-  # 5. Docker (Solo tras un nuevo Release exitoso)
   docker:
-    needs: [test, release]
+    needs: [check-pyproject, test, release]
     if: |
+      needs.check-pyproject.outputs.exists == 'true' &&
       always() && github.event_name == 'push' &&
       vars.ENABLE_PYPI_PUBLISH == 'true' &&
       (github.ref == 'refs/heads/main' || needs.release.result == 'success')

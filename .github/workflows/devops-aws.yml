@@ -26,7 +26,7 @@ permissions:
 jobs:
   deploy-to-aws:
     name: Deploy to AWS ECS
-    needs: build-and-push-docker # Se ejecuta solo después del build
+    needs: build-and-push-docker
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
     steps:

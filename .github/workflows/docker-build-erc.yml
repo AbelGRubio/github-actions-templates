@@ -3,7 +3,6 @@ name: Docker Image Build & Push to ECR
 
 on:
   workflow_call:
-    # Opcional: puedes recibir inputs del workflow principal si lo necesitas
     inputs:
       version_tag:
         required: false
@@ -15,14 +14,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # Necesario para autenticarse con AWS
+      id-token: write
 
     steps:
       # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Configure AWS Credentials (necesario para acceder a ECR)
+      # 2. Configure AWS Credentials
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -35,7 +34,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 4. Extract metadata (etiquetado automático)
+      # 4. Extract metadata
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
