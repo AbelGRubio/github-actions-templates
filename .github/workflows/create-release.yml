@@ -1,0 +1,39 @@
+name: Create GitHub Release
+
+# Can be triggered manually by selecting the tag, or automatically when pushing a 'v*' tag
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag version to release (e.g., v1.0.0)'
+        required: true
+  push:
+    tags:
+      - 'v*' # Triggers when pushing a tag starting with v (e.g., git tag v1.0.0 && git push origin v1.0.0)
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    # Mandatory permission for GitHub Actions to write the release to the repository
+    permissions:
+      contents: write
+
+    steps:
+      # 1. Checkout repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Create GitHub Release using action
+      - name: Release with Notes
+        uses: softprops/action-gh-release@v2
+        with:
+          # If triggered by workflow_dispatch use the input, if by tag use the current reference name
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: Release ${{ github.event.inputs.tag_name || github.ref_name }}
+          # Automatically generate release notes based on merged PRs and commits
+          generate_release_notes: true
+          # Optional: If you want to attach a compiled file (e.g., a .zip or binary)
+          # files: |
+          #   dist/my-application.zip
