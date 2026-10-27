@@ -1,3 +1,4 @@
+# .github/workflows/devops-aws.yml
 name: Manual AWS CD Pipeline
 
 # 1. Trigger configuration: Manual execution via workflow_dispatch

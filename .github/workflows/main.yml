@@ -1,4 +1,5 @@
-name: Master Pipeline
+# .github/workflows/main.yml
+name: Master Pipeline CI
 
 on:
   push:
